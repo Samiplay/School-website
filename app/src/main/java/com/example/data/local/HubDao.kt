@@ -10,18 +10,24 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface HubDao {
     // Classes
-    @Query("SELECT * FROM school_classes ORDER BY time ASC")
+    @Query("SELECT * FROM school_classes ORDER BY dayOfWeek ASC, time ASC")
     fun observeClasses(): Flow<List<SchoolClassEntity>>
+
+    @Query("SELECT * FROM school_classes ORDER BY dayOfWeek ASC, time ASC")
+    suspend fun getAllClassesOnce(): List<SchoolClassEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertClass(item: SchoolClassEntity)
 
     @Query("DELETE FROM school_classes WHERE id = :id")
-    suspend fun deleteClass(id: Long)
+    suspend fun deleteClassById(id: Long)
 
     // Homework
-    @Query("SELECT * FROM homework_tasks")
+    @Query("SELECT * FROM homework_items ORDER BY done ASC, CASE WHEN dueDate = '' THEN '9999-99-99' ELSE dueDate END ASC, id DESC")
     fun observeHomework(): Flow<List<HomeworkEntity>>
+
+    @Query("SELECT * FROM homework_items")
+    suspend fun getAllHomeworkOnce(): List<HomeworkEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertHomework(item: HomeworkEntity)
@@ -29,12 +35,15 @@ interface HubDao {
     @Update
     suspend fun updateHomework(item: HomeworkEntity)
 
-    @Query("DELETE FROM homework_tasks WHERE id = :id")
-    suspend fun deleteHomework(id: Long)
+    @Query("DELETE FROM homework_items WHERE id = :id")
+    suspend fun deleteHomeworkById(id: Long)
 
     // Study Topics
-    @Query("SELECT * FROM study_topics")
+    @Query("SELECT * FROM study_topics ORDER BY done ASC, CASE WHEN testDate = '' THEN '9999-99-99' ELSE testDate END ASC, id DESC")
     fun observeStudyTopics(): Flow<List<StudyTopicEntity>>
+
+    @Query("SELECT * FROM study_topics")
+    suspend fun getAllStudyTopicsOnce(): List<StudyTopicEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertStudyTopic(item: StudyTopicEntity)
@@ -43,24 +52,30 @@ interface HubDao {
     suspend fun updateStudyTopic(item: StudyTopicEntity)
 
     @Query("DELETE FROM study_topics WHERE id = :id")
-    suspend fun deleteStudyTopic(id: Long)
+    suspend fun deleteStudyTopicById(id: Long)
 
-    // Pack Items
-    @Query("SELECT * FROM pack_items ORDER BY id ASC")
-    fun observePackItems(): Flow<List<PackItemEntity>>
+    // Bag Items
+    @Query("SELECT * FROM bag_items ORDER BY id ASC")
+    fun observeBagItems(): Flow<List<BagItemEntity>>
+
+    @Query("SELECT * FROM bag_items")
+    suspend fun getAllBagItemsOnce(): List<BagItemEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertPackItem(item: PackItemEntity)
+    suspend fun insertBagItem(item: BagItemEntity)
 
     @Update
-    suspend fun updatePackItem(item: PackItemEntity)
+    suspend fun updateBagItem(item: BagItemEntity)
 
-    @Query("DELETE FROM pack_items WHERE id = :id")
-    suspend fun deletePackItem(id: Long)
+    @Query("DELETE FROM bag_items WHERE id = :id")
+    suspend fun deleteBagItemById(id: Long)
 
     // Exams
-    @Query("SELECT * FROM exams ORDER BY date ASC")
+    @Query("SELECT * FROM exams ORDER BY date ASC, id ASC")
     fun observeExams(): Flow<List<ExamEntity>>
+
+    @Query("SELECT * FROM exams ORDER BY date ASC")
+    suspend fun getAllExamsOnce(): List<ExamEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertExam(item: ExamEntity)
@@ -69,18 +84,21 @@ interface HubDao {
     suspend fun updateExam(item: ExamEntity)
 
     @Query("DELETE FROM exams WHERE id = :id")
-    suspend fun deleteExam(id: Long)
+    suspend fun deleteExamById(id: Long)
 
-    // Money Transactions
-    @Query("SELECT * FROM money_transactions ORDER BY date DESC, createdAt DESC, id DESC")
+    // Transactions
+    @Query("SELECT * FROM transactions ORDER BY date DESC, createdAt DESC, id DESC")
     fun observeTransactions(): Flow<List<TransactionEntity>>
+
+    @Query("SELECT * FROM transactions ORDER BY date DESC, createdAt DESC")
+    suspend fun getAllTransactionsOnce(): List<TransactionEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTransaction(item: TransactionEntity)
 
-    @Query("DELETE FROM money_transactions WHERE id = :id")
-    suspend fun deleteTransaction(id: Long)
+    @Query("DELETE FROM transactions WHERE id = :id")
+    suspend fun deleteTransactionById(id: Long)
 
-    @Query("DELETE FROM money_transactions")
-    suspend fun deleteAllTransactions()
+    @Query("DELETE FROM transactions")
+    suspend fun clearAllTransactions()
 }

@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -12,7 +13,6 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,30 +21,32 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccessTime
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.outlined.CalendarToday
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.LightMode
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
@@ -57,65 +59,115 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.theme.BricolageGrotesqueFamily
-import com.example.ui.theme.LocalHubPalette
-import com.example.ui.viewmodel.HubFormatters
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
+import com.example.R
+import com.example.ui.theme.LocalHubColors
+import com.example.ui.viewmodel.MainSection
+import com.example.util.DateUtils
+import com.example.util.DueUrgency
+import java.util.Locale
 
 @Composable
-fun HubCard(
-    modifier: Modifier = Modifier,
-    content: @Composable ColumnScope.() -> Unit
+fun HubTopBar(
+    activeSection: MainSection,
+    isDark: Boolean,
+    onSelectSection: (MainSection) -> Unit,
+    onToggleTheme: () -> Unit,
+    onLock: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val palette = LocalHubPalette.current
+    val hubColors = LocalHubColors.current
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
-        color = palette.surface,
-        border = BorderStroke(1.dp, palette.line)
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, hubColors.line),
+        shadowElevation = 2.dp
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            content = content
-        )
-    }
-}
-
-@Composable
-fun HubSectionHeader(
-    title: String,
-    subtitle: String? = null
-) {
-    val palette = LocalHubPalette.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Bottom
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleLarge,
-            color = palette.ink
-        )
-        if (!subtitle.isNullOrBlank()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
             Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                fontSize = 13.sp,
-                color = palette.muted
+                text = stringResource(R.string.app_name),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(start = 6.dp)
             )
+
+            // Segmented section switcher
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.background,
+                border = BorderStroke(1.dp, hubColors.line)
+            ) {
+                Row(
+                    modifier = Modifier.padding(3.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    MainSection.entries.forEach { section ->
+                        val selected = section == activeSection
+                        val label = if (section == MainSection.SCHOOL) {
+                            stringResource(R.string.nav_school)
+                        } else {
+                            stringResource(R.string.nav_money)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(
+                                    if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
+                                )
+                                .clickable { onSelectSection(section) }
+                                .minimumInteractiveComponentSize()
+                                .padding(horizontal = 14.dp, vertical = 6.dp)
+                                .testTag("nav_${section.key}"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = if (selected) {
+                                    MaterialTheme.colorScheme.onPrimary
+                                } else {
+                                    hubColors.muted
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    onClick = onToggleTheme,
+                    modifier = Modifier.testTag("theme_toggle_button")
+                ) {
+                    Icon(
+                        imageVector = if (isDark) Icons.Outlined.LightMode else Icons.Outlined.DarkMode,
+                        contentDescription = stringResource(R.string.action_toggle_theme),
+                        tint = hubColors.muted
+                    )
+                }
+                IconButton(
+                    onClick = onLock,
+                    modifier = Modifier.testTag("lock_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Lock,
+                        contentDescription = stringResource(R.string.action_lock),
+                        tint = hubColors.muted
+                    )
+                }
+            }
         }
     }
 }
@@ -130,7 +182,7 @@ fun SummaryPillRow(
     pills: List<SummaryPillData>,
     modifier: Modifier = Modifier
 ) {
-    val palette = LocalHubPalette.current
+    val hubColors = LocalHubColors.current
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -139,17 +191,14 @@ fun SummaryPillRow(
             Surface(
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(12.dp),
-                color = palette.surface,
-                border = BorderStroke(1.dp, palette.line)
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, hubColors.line)
             ) {
                 Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
                     Text(
                         text = pill.value,
-                        fontFamily = BricolageGrotesqueFamily,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 21.sp,
-                        lineHeight = 25.sp,
-                        color = palette.ink,
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -157,53 +206,7 @@ fun SummaryPillRow(
                         text = pill.label,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Normal,
-                        color = palette.muted,
-                        maxLines = 2
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun HubSegmentedTabs(
-    tabs: List<Pair<String, String>>,
-    selectedKey: String,
-    onSelect: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    testTagPrefix: String = "tab"
-) {
-    val palette = LocalHubPalette.current
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        color = palette.surface,
-        border = BorderStroke(1.dp, palette.line)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            tabs.forEach { (key, label) ->
-                val selected = key == selectedKey
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .defaultMinSize(minHeight = 44.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(if (selected) palette.accent else Color.Transparent)
-                        .clickable(role = Role.Tab) { onSelect(key) }
-                        .testTag("${testTagPrefix}_$key")
-                        .padding(horizontal = 8.dp, vertical = 10.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = if (selected) palette.accentInk else palette.muted,
+                        color = hubColors.muted,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -214,166 +217,155 @@ fun HubSegmentedTabs(
 }
 
 @Composable
-fun HubPrimaryButton(
-    text: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true
-) {
-    val palette = LocalHubPalette.current
-    Button(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = modifier.defaultMinSize(minHeight = 48.dp),
-        shape = RoundedCornerShape(10.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = palette.accent,
-            contentColor = palette.accentInk
-        ),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold
-        )
-    }
-}
-
-@Composable
-fun HubAltButton(
-    text: String,
-    onClick: () -> Unit,
+fun <T> SubTabBar(
+    items: List<Pair<T, String>>,
+    selected: T,
+    onSelect: (T) -> Unit,
+    testTagPrefix: String,
     modifier: Modifier = Modifier
 ) {
-    val palette = LocalHubPalette.current
-    OutlinedButton(
-        onClick = onClick,
-        modifier = modifier.defaultMinSize(minHeight = 48.dp),
-        shape = RoundedCornerShape(10.dp),
-        border = BorderStroke(1.dp, palette.line),
-        colors = ButtonDefaults.outlinedButtonColors(
-            containerColor = palette.bg,
-            contentColor = palette.ink
-        ),
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+    val hubColors = LocalHubColors.current
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, hubColors.line)
     ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold
-        )
-    }
-}
-
-@Composable
-fun HubTextField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    placeholder: String,
-    modifier: Modifier = Modifier,
-    singleLine: Boolean = true,
-    maxLength: Int = 120,
-    keyboardOptions: androidx.compose.foundation.text.KeyboardOptions = androidx.compose.foundation.text.KeyboardOptions.Default
-) {
-    val palette = LocalHubPalette.current
-    OutlinedTextField(
-        value = value,
-        onValueChange = { if (it.length <= maxLength) onValueChange(it) },
-        modifier = modifier,
-        placeholder = { Text(placeholder, color = palette.muted) },
-        singleLine = singleLine,
-        shape = RoundedCornerShape(10.dp),
-        keyboardOptions = keyboardOptions,
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = palette.bg,
-            unfocusedContainerColor = palette.bg,
-            focusedBorderColor = palette.accent,
-            unfocusedBorderColor = palette.line,
-            focusedTextColor = palette.ink,
-            unfocusedTextColor = palette.ink,
-            cursorColor = palette.accent
-        )
-    )
-}
-
-@Composable
-fun HubCheckboxButton(
-    checked: Boolean,
-    contentDesc: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val palette = LocalHubPalette.current
-    Box(
-        modifier = modifier
-            .size(48.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .clickable(role = Role.Checkbox, onClick = onClick)
-            .semantics { contentDescription = contentDesc },
-        contentAlignment = Alignment.Center
-    ) {
-        Box(
+        Row(
             modifier = Modifier
-                .size(28.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(if (checked) palette.accent else Color.Transparent)
-                .border(2.dp, palette.accent, RoundedCornerShape(8.dp)),
-            contentAlignment = Alignment.Center
+                .fillMaxWidth()
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            if (checked) {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = null,
-                    tint = palette.accentInk,
-                    modifier = Modifier.size(18.dp)
-                )
+            items.forEach { (item, label) ->
+                val isSelected = item == selected
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(
+                            if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
+                        )
+                        .clickable { onSelect(item) }
+                        .minimumInteractiveComponentSize()
+                        .padding(horizontal = 6.dp, vertical = 10.dp)
+                        .testTag("${testTagPrefix}_${label.lowercase().replace(" ", "_")}"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (isSelected) {
+                            MaterialTheme.colorScheme.onPrimary
+                        } else {
+                            hubColors.muted
+                        },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-fun HubDeleteButton(
-    onClick: () -> Unit,
-    contentDesc: String = "Delete",
+fun HubSectionCard(
+    modifier: Modifier = Modifier,
+    title: String? = null,
+    subtitle: String? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val hubColors = LocalHubColors.current
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, hubColors.line)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            if (title != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (subtitle != null) {
+                        Text(
+                            text = subtitle,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Normal,
+                            color = hubColors.muted
+                        )
+                    }
+                }
+            }
+            content()
+        }
+    }
+}
+
+@Composable
+fun HubProgressBar(
+    progress: Float,
+    color: Color = MaterialTheme.colorScheme.primary,
+    heightDp: Int = 10,
     modifier: Modifier = Modifier
 ) {
-    val palette = LocalHubPalette.current
-    IconButton(
-        onClick = onClick,
-        modifier = modifier.size(48.dp)
+    val hubColors = LocalHubColors.current
+    val animated by animateFloatAsState(
+        targetValue = progress.coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = 250),
+        label = "progress"
+    )
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(heightDp.dp)
+            .clip(RoundedCornerShape(99.dp))
+            .background(hubColors.line)
     ) {
-        Icon(
-            imageVector = Icons.Default.Close,
-            contentDescription = contentDesc,
-            tint = palette.muted,
-            modifier = Modifier.size(18.dp)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(animated)
+                .fillMaxHeight()
+                .clip(RoundedCornerShape(99.dp))
+                .background(color)
         )
     }
 }
 
 @Composable
-fun HubTag(
+fun HubTagChip(
     text: String,
-    style: String = "" // "soon", "late", ""
+    urgency: DueUrgency,
+    modifier: Modifier = Modifier
 ) {
-    val palette = LocalHubPalette.current
-    val bgColor = when (style) {
-        "soon" -> palette.highlight
-        else -> palette.bg
+    val hubColors = LocalHubColors.current
+    val bgColor = when (urgency) {
+        DueUrgency.SOON -> hubColors.highlight
+        DueUrgency.LATE -> MaterialTheme.colorScheme.background
+        DueUrgency.NORMAL -> MaterialTheme.colorScheme.background
     }
-    val borderColor = when (style) {
-        "soon" -> palette.highlight
-        "late" -> palette.warn
-        else -> palette.line
+    val borderColor = when (urgency) {
+        DueUrgency.SOON -> hubColors.highlight
+        DueUrgency.LATE -> hubColors.warn
+        DueUrgency.NORMAL -> hubColors.line
     }
-    val textColor = when (style) {
-        "soon" -> palette.highlightInk
-        "late" -> palette.warn
-        else -> palette.ink
+    val textColor = when (urgency) {
+        DueUrgency.SOON -> hubColors.highlightInk
+        DueUrgency.LATE -> hubColors.warn
+        DueUrgency.NORMAL -> MaterialTheme.colorScheme.onSurface
     }
     Surface(
+        modifier = modifier,
         shape = RoundedCornerShape(999.dp),
         color = bgColor,
         border = BorderStroke(1.dp, borderColor)
@@ -382,93 +374,126 @@ fun HubTag(
             text = text,
             style = MaterialTheme.typography.labelSmall,
             color = textColor,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
-            maxLines = 1
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
         )
     }
 }
 
 @Composable
-fun HubProgressBar(
-    progress: Float,
-    barColor: Color,
-    heightDp: Int = 8,
+fun HubCheckRow(
+    text: String,
+    checked: Boolean,
+    onToggle: () -> Unit,
+    onDelete: () -> Unit,
+    tagText: String? = null,
+    tagUrgency: DueUrgency = DueUrgency.NORMAL,
+    toggleTestTag: String,
+    deleteTestTag: String,
     modifier: Modifier = Modifier
 ) {
-    val palette = LocalHubPalette.current
-    val animated by animateFloatAsState(
-        targetValue = progress.coerceIn(0f, 1f),
-        label = "progress"
-    )
-    Box(
+    val hubColors = LocalHubColors.current
+    Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(heightDp.dp)
-            .clip(RoundedCornerShape(99.dp))
-            .background(palette.line)
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Box(
             modifier = Modifier
-                .fillMaxWidth(animated)
-                .fillMaxHeight()
-                .clip(RoundedCornerShape(99.dp))
-                .background(barColor)
+                .minimumInteractiveComponentSize()
+                .clickable(onClick = onToggle)
+                .testTag(toggleTestTag),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(
+                        if (checked) MaterialTheme.colorScheme.primary else Color.Transparent
+                    )
+                    .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                if (checked) {
+                    Icon(
+                        imageVector = Icons.Outlined.Check,
+                        contentDescription = "Completed",
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyLarge.copy(
+                textDecoration = if (checked) TextDecoration.LineThrough else TextDecoration.None
+            ),
+            color = if (checked) hubColors.done else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f)
         )
+
+        if (!tagText.isNullOrBlank()) {
+            HubTagChip(
+                text = tagText,
+                urgency = if (checked) DueUrgency.NORMAL else tagUrgency
+            )
+        }
+
+        IconButton(
+            onClick = onDelete,
+            modifier = Modifier.testTag(deleteTestTag)
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Close,
+                contentDescription = "Delete",
+                tint = hubColors.muted,
+                modifier = Modifier.size(20.dp)
+            )
+        }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HubDropdownField(
+fun HubDropdownSelector(
     label: String,
     options: List<String>,
     selectedOption: String,
     onSelect: (String) -> Unit,
+    testTag: String,
     modifier: Modifier = Modifier
 ) {
-    val palette = LocalHubPalette.current
     var expanded by remember { mutableStateOf(false) }
-
-    Box(modifier = modifier) {
-        Surface(
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded },
+        modifier = modifier
+    ) {
+        OutlinedTextField(
+            value = selectedOption,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(label) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            singleLine = true,
             modifier = Modifier
+                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
                 .fillMaxWidth()
-                .defaultMinSize(minHeight = 48.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .clickable { expanded = true },
-            shape = RoundedCornerShape(10.dp),
-            color = palette.bg,
-            border = BorderStroke(1.dp, palette.line)
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = selectedOption.ifBlank { label },
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = palette.ink,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                Icon(
-                    imageVector = Icons.Default.ArrowDropDown,
-                    contentDescription = "Select $label",
-                    tint = palette.muted
-                )
-            }
-        }
-        DropdownMenu(
+                .testTag(testTag)
+        )
+        ExposedDropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.background(palette.surface)
+            onDismissRequest = { expanded = false }
         ) {
-            options.forEach { opt ->
+            options.forEach { option ->
                 DropdownMenuItem(
-                    text = { Text(opt, color = palette.ink) },
+                    text = { Text(option) },
                     onClick = {
-                        onSelect(opt)
+                        onSelect(option)
                         expanded = false
                     }
                 )
@@ -479,72 +504,81 @@ fun HubDropdownField(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HubDatePickerButton(
+fun HubDatePickerField(
+    label: String,
     dateKey: String,
-    placeholder: String,
     onDateSelected: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    allowClear: Boolean = false
+    allowClear: Boolean = false,
+    testTag: String,
+    modifier: Modifier = Modifier
 ) {
-    val palette = LocalHubPalette.current
     var showDialog by remember { mutableStateOf(false) }
-    val displayText = if (dateKey.isBlank()) placeholder else HubFormatters.formatShortDate(dateKey)
+    val hubColors = LocalHubColors.current
+    val display = if (dateKey.isBlank()) label else DateUtils.formatShortDate(dateKey)
 
-    Surface(
-        modifier = modifier
-            .defaultMinSize(minHeight = 48.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .clickable { showDialog = true },
+    OutlinedButton(
+        onClick = { showDialog = true },
         shape = RoundedCornerShape(10.dp),
-        color = palette.bg,
-        border = BorderStroke(1.dp, palette.line)
+        border = BorderStroke(1.dp, hubColors.line),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = MaterialTheme.colorScheme.background,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ),
+        modifier = modifier
+            .minimumInteractiveComponentSize()
+            .testTag(testTag)
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.CalendarMonth,
-                contentDescription = null,
-                tint = palette.muted,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = displayText,
-                style = MaterialTheme.typography.bodyLarge,
-                color = if (dateKey.isBlank()) palette.muted else palette.ink,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
+        Icon(
+            imageVector = Icons.Outlined.CalendarToday,
+            contentDescription = label,
+            modifier = Modifier.size(16.dp),
+            tint = hubColors.muted
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = display,
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 
     if (showDialog) {
-        val initialMillis = (HubFormatters.parseDateOrNull(dateKey) ?: LocalDate.now())
-            .atStartOfDay(ZoneOffset.UTC)
-            .toInstant()
-            .toEpochMilli()
+        val initialMillis = DateUtils.parseKey(dateKey)?.let {
+            // Align UTC millis for DatePicker
+            val utc = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+            utc.set(
+                it.get(java.util.Calendar.YEAR),
+                it.get(java.util.Calendar.MONTH),
+                it.get(java.util.Calendar.DAY_OF_MONTH),
+                0, 0, 0
+            )
+            utc.set(java.util.Calendar.MILLISECOND, 0)
+            utc.timeInMillis
+        }
         val state = rememberDatePickerState(initialSelectedDateMillis = initialMillis)
         DatePickerDialog(
             onDismissRequest = { showDialog = false },
             confirmButton = {
-                TextButton(onClick = {
-                    val millis = state.selectedDateMillis
-                    if (millis != null) {
-                        val picked = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()
-                        onDateSelected(picked.format(DateTimeFormatter.ISO_LOCAL_DATE))
+                TextButton(
+                    onClick = {
+                        state.selectedDateMillis?.let { millis ->
+                            onDateSelected(DateUtils.dateKeyFromMillis(millis))
+                        }
+                        showDialog = false
                     }
-                    showDialog = false
-                }) { Text("OK") }
+                ) { Text("OK") }
             },
             dismissButton = {
                 Row {
                     if (allowClear && dateKey.isNotBlank()) {
-                        TextButton(onClick = {
-                            onDateSelected("")
-                            showDialog = false
-                        }) { Text("Clear") }
+                        TextButton(
+                            onClick = {
+                                onDateSelected("")
+                                showDialog = false
+                            }
+                        ) { Text("Clear") }
                     }
                     TextButton(onClick = { showDialog = false }) { Text("Cancel") }
                 }
@@ -557,67 +591,66 @@ fun HubDatePickerButton(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HubTimePickerButton(
+fun HubTimePickerField(
     time24: String,
     onTimeSelected: (String) -> Unit,
+    testTag: String,
     modifier: Modifier = Modifier
 ) {
-    val palette = LocalHubPalette.current
     var showDialog by remember { mutableStateOf(false) }
-
-    Surface(
-        modifier = modifier
-            .defaultMinSize(minHeight = 48.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .clickable { showDialog = true },
+    val hubColors = LocalHubColors.current
+    OutlinedButton(
+        onClick = { showDialog = true },
         shape = RoundedCornerShape(10.dp),
-        color = palette.bg,
-        border = BorderStroke(1.dp, palette.line)
+        border = BorderStroke(1.dp, hubColors.line),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = MaterialTheme.colorScheme.background,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ),
+        modifier = modifier
+            .minimumInteractiveComponentSize()
+            .testTag(testTag)
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.AccessTime,
-                contentDescription = null,
-                tint = palette.muted,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = HubFormatters.formatTime12h(time24),
-                style = MaterialTheme.typography.bodyLarge,
-                color = palette.ink,
-                maxLines = 1
-            )
-        }
+        Icon(
+            imageVector = Icons.Outlined.Schedule,
+            contentDescription = "Select time",
+            modifier = Modifier.size(16.dp),
+            tint = hubColors.muted
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = DateUtils.format12Hour(time24),
+            style = MaterialTheme.typography.bodyMedium
+        )
     }
 
     if (showDialog) {
         val parts = time24.split(":")
         val h = parts.getOrNull(0)?.toIntOrNull() ?: 8
         val m = parts.getOrNull(1)?.toIntOrNull() ?: 30
-        val state = rememberTimePickerState(initialHour = h, initialMinute = m, is24Hour = false)
+        val timeState = rememberTimePickerState(initialHour = h, initialMinute = m, is24Hour = false)
         AlertDialog(
             onDismissRequest = { showDialog = false },
+            title = { Text("Class start time", style = MaterialTheme.typography.titleMedium) },
+            text = { TimePicker(state = timeState) },
             confirmButton = {
-                TextButton(onClick = {
-                    val hh = state.hour.toString().padStart(2, '0')
-                    val mm = state.minute.toString().padStart(2, '0')
-                    onTimeSelected("$hh:$mm")
-                    showDialog = false
-                }) { Text("OK") }
+                TextButton(
+                    onClick = {
+                        val formatted = String.format(
+                            Locale.US,
+                            "%02d:%02d",
+                            timeState.hour,
+                            timeState.minute
+                        )
+                        onTimeSelected(formatted)
+                        showDialog = false
+                    }
+                ) { Text("OK") }
             },
             dismissButton = {
                 TextButton(onClick = { showDialog = false }) { Text("Cancel") }
-            },
-            text = { TimePicker(state = state) }
+            }
         )
     }
-}
-
-@Composable
-fun HubRowDivider() {
-    HorizontalDivider(color = LocalHubPalette.current.line, thickness = 1.dp)
 }

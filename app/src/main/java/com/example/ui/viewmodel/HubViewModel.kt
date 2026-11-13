@@ -1,311 +1,198 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.R
+import com.example.data.local.AppDatabase
+import com.example.data.local.ClassSessionEntity
 import com.example.data.local.ExamEntity
 import com.example.data.local.HomeworkEntity
-import com.example.data.local.HubDatabase
 import com.example.data.local.HubPreferences
-import com.example.data.local.HubPrefsState
+import com.example.data.local.MainSection
 import com.example.data.local.PackItemEntity
-import com.example.data.local.SchoolClassEntity
+import com.example.data.local.PreferencesManager
+import com.example.data.local.SavingsGoalEntity
 import com.example.data.local.StudyTopicEntity
+import com.example.data.local.ThemePreference
 import com.example.data.local.TransactionEntity
 import com.example.data.repository.HubRepository
-import com.example.ui.theme.ThemeMode
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import kotlin.math.ceil
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+data class StudyTimerState(
+    val mode: String = "Focus",
+    val statusLabel: String = "Focus",
+    val secondsRemaining: Int = 25 * 60,
+    val isRunning: Boolean = false
+)
+
+sealed interface BackupExportEvent {
+    data class Success(val schoolCount: Int, val moneyCount: Int) : BackupExportEvent
+    data class Failure(val message: String) : BackupExportEvent
+}
+
+data class HubUiState(
+    val isUnlocked: Boolean = false,
+    val lockError: String? = null,
+    val lockShakeCounter: Int = 0,
+    val preferences: HubPreferences = HubPreferences(),
+    val classes: List<ClassSessionEntity> = emptyList(),
+    val homework: List<HomeworkEntity> = emptyList(),
+    val studyTopics: List<StudyTopicEntity> = emptyList(),
+    val packItems: List<PackItemEntity> = emptyList(),
+    val exams: List<ExamEntity> = emptyList(),
+    val transactions: List<TransactionEntity> = emptyList(),
+    val savingsGoal: SavingsGoalEntity? = null,
+    val timer: StudyTimerState = StudyTimerState(),
+    val showAllHistory: Boolean = false,
+    val isExportingBackup: Boolean = false,
+    val lastBackupSummary: String? = null
+)
 
 class HubViewModel(application: Application) : AndroidViewModel(application) {
-    private val repository: HubRepository = HubRepository(
-        dao = HubDatabase.getInstance(application).hubDao(),
-        prefs = HubPreferences(application)
-    )
 
-    private val isUnlocked = MutableStateFlow(false)
-    private val lockError = MutableStateFlow("")
-    private val lockShakeCount = MutableStateFlow(0)
-    private val showAllTx = MutableStateFlow(false)
+    private val repository: HubRepository
 
-    private val timerMode = MutableStateFlow("Focus")
-    private val timerStatusLabel = MutableStateFlow("Focus")
-    private val timerSeconds = MutableStateFlow(1500)
-    private val timerRunning = MutableStateFlow(false)
+    init {
+        val db = AppDatabase.getInstance(application)
+        val prefs = PreferencesManager(application)
+        repository = HubRepository(
+            schoolDao = db.schoolDao(),
+            moneyDao = db.moneyDao(),
+            preferencesManager = prefs
+        )
+    }
+
+    private val _lockState = MutableStateFlow(LockSessionState())
+    private val _timerState = MutableStateFlow(StudyTimerState())
+    private val _showAllHistory = MutableStateFlow(false)
+    private val _exportState = MutableStateFlow(ExportUiState())
+    private val _backupEvents = MutableSharedFlow<BackupExportEvent>()
+    val backupEvents: SharedFlow<BackupExportEvent> = _backupEvents.asSharedFlow()
+
     private var timerJob: Job? = null
 
-    private data class SchoolRawData(
-        val classes: List<SchoolClassEntity>,
+    private data class LockSessionState(
+        val isUnlocked: Boolean = false,
+        val error: String? = null,
+        val shakeCounter: Int = 0
+    )
+
+    private data class ExportUiState(
+        val isExporting: Boolean = false,
+        val lastSummary: String? = null
+    )
+
+    private data class SchoolDataBundle(
+        val classes: List<ClassSessionEntity>,
         val homework: List<HomeworkEntity>,
-        val study: List<StudyTopicEntity>,
-        val pack: List<PackItemEntity>,
+        val studyTopics: List<StudyTopicEntity>,
+        val packItems: List<PackItemEntity>,
         val exams: List<ExamEntity>
     )
 
-    private data class TimerState(
-        val mode: String,
-        val statusLabel: String,
-        val seconds: Int,
-        val running: Boolean
-    )
-
-    private val schoolFlow = combine(
-        repository.classesFlow,
-        repository.homeworkFlow,
-        repository.studyTopicsFlow,
-        repository.packItemsFlow,
-        repository.examsFlow
+    private val schoolBundleFlow = combine(
+        repository.classes,
+        repository.homework,
+        repository.studyTopics,
+        repository.packItems,
+        repository.exams
     ) { classes, hw, study, pack, exams ->
-        SchoolRawData(classes, hw, study, pack, exams)
+        SchoolDataBundle(classes, hw, study, pack, exams)
     }
 
-    private val timerFlow = combine(
-        timerMode,
-        timerStatusLabel,
-        timerSeconds,
-        timerRunning
-    ) { mode, status, secs, running ->
-        TimerState(mode, status, secs, running)
-    }
-
-    private val lockFlow = combine(
-        isUnlocked,
-        lockError,
-        lockShakeCount
-    ) { unlocked, err, shake ->
-        Triple(unlocked, err, shake)
+    private val moneyBundleFlow = combine(
+        repository.transactions,
+        repository.savingsGoal,
+        _showAllHistory
+    ) { tx, goal, showAll ->
+        Triple(tx, goal, showAll)
     }
 
     val uiState: StateFlow<HubUiState> = combine(
-        lockFlow,
-        repository.prefsFlow,
-        schoolFlow,
-        repository.transactionsFlow,
-        combine(timerFlow, showAllTx) { t, showAll -> t to showAll }
-    ) { lock, prefs, school, transactions, timerAndShowAll ->
-        val (timer, showAll) = timerAndShowAll
-        buildUiState(
-            unlocked = lock.first,
-            lockError = lock.second,
-            lockShakeCount = lock.third,
-            prefs = prefs,
-            school = school,
-            transactions = transactions,
+        _lockState,
+        repository.preferences,
+        schoolBundleFlow,
+        moneyBundleFlow,
+        combine(_timerState, _exportState) { timer, export -> timer to export }
+    ) { lock, prefs, school, money, (timer, export) ->
+        HubUiState(
+            isUnlocked = lock.isUnlocked,
+            lockError = lock.error,
+            lockShakeCounter = lock.shakeCounter,
+            preferences = prefs,
+            classes = school.classes,
+            homework = school.homework,
+            studyTopics = school.studyTopics,
+            packItems = school.packItems,
+            exams = school.exams,
+            transactions = money.first,
+            savingsGoal = money.second,
             timer = timer,
-            showAll = showAll
+            showAllHistory = money.third,
+            isExportingBackup = export.isExporting,
+            lastBackupSummary = export.lastSummary
         )
     }.stateIn(
         scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
+        started = SharingStarted.WhileSubscribed(5_000),
         initialValue = HubUiState()
     )
 
-    private fun buildUiState(
-        unlocked: Boolean,
-        lockError: String,
-        lockShakeCount: Int,
-        prefs: HubPrefsState,
-        school: SchoolRawData,
-        transactions: List<TransactionEntity>,
-        timer: TimerState,
-        showAll: Boolean
-    ): HubUiState {
-        val today = LocalDate.now()
-        val tomorrow = today.plusDays(1)
-        val todayKey = today.format(DateTimeFormatter.ISO_LOCAL_DATE)
-        val tomorrowKey = tomorrow.format(DateTimeFormatter.ISO_LOCAL_DATE)
-        val tomorrowDow = tomorrow.dayOfWeek.value % 7
-        val monthKey = todayKey.take(7)
-        val weekStartKey = today.minusDays(6).format(DateTimeFormatter.ISO_LOCAL_DATE)
+    // Matching password check from index.html: [49, 114, 50, 114, 51, 114, 52, 82]
+    private val expectedCharCodes = intArrayOf(49, 114, 50, 114, 51, 114, 52, 82)
 
-        val tomorrowClasses = school.classes
-            .filter { it.day == tomorrowDow }
-            .sortedBy { it.time }
-
-        val classesByDay = HubFormatters.DAY_ORDER
-            .associateWith { d -> school.classes.filter { it.day == d }.sortedBy { it.time } }
-            .filterValues { it.isNotEmpty() }
-
-        val sortedHomework = school.homework.sortedWith(
-            compareBy<HomeworkEntity> { it.done }
-                .thenBy { it.due.ifBlank { "9999-99-99" } }
-                .thenBy { it.id }
-        )
-
-        val dueTomorrowCount = school.homework.count {
-            !it.done && it.due.isNotBlank() && it.due <= tomorrowKey
-        }
-
-        val sortedStudy = school.study.sortedWith(
-            compareBy<StudyTopicEntity> { it.done }
-                .thenBy { it.date.ifBlank { "9999-99-99" } }
-                .thenBy { it.id }
-        )
-
-        val toStudyCount = school.study.count { !it.done }
-
-        val examItems = school.exams
-            .sortedBy { it.date }
-            .map { exam ->
-                val topics = repository.parseTopics(exam.topicsJson)
-                val n = HubFormatters.daysUntil(exam.date, today) ?: 0L
-                val total = topics.size
-                val done = topics.count { it.done }
-                val rem = total - done
-                val tag = when {
-                    n < 0L -> "Passed"
-                    n == 0L -> "Today"
-                    n == 1L -> "Tomorrow"
-                    else -> "In $n days"
-                }
-                val per = if (n >= 2L && rem > 0) {
-                    ceil(rem.toDouble() / (n - 1).toDouble()).toInt()
-                } else 0
-                val plan = when {
-                    n < 0L -> "This exam has passed. You can delete it."
-                    n == 0L -> "Exam today. Trust your preparation."
-                    n == 1L -> "Exam is tomorrow. Review your weakest topics, pack your bag, and sleep early."
-                    total == 0 -> "Add topics next time to get a daily plan."
-                    rem == 0 -> "Every topic is covered. Use the days left for practice."
-                    else -> "Plan: cover about $per topic${if (per == 1) "" else "s"} a day to finish the day before."
-                }
-                ExamDisplayItem(
-                    entity = exam,
-                    topics = topics,
-                    daysUntil = n,
-                    formattedDate = HubFormatters.formatFullDate(exam.date),
-                    tagText = tag,
-                    isSoon = n in 0L..3L,
-                    studyTip = HubFormatters.STUDY_TIPS[exam.method].orEmpty(),
-                    planText = plan
+    fun attemptUnlock(password: String): Boolean {
+        val matches = password.length == expectedCharCodes.size &&
+            password.indices.all { i -> password[i].code == expectedCharCodes[i] }
+        return if (matches) {
+            _lockState.value = LockSessionState(isUnlocked = true, error = null, shakeCounter = 0)
+            true
+        } else {
+            val errorText = getApplication<Application>().getString(R.string.lock_error)
+            _lockState.update {
+                it.copy(
+                    isUnlocked = false,
+                    error = errorText,
+                    shakeCounter = it.shakeCounter + 1
                 )
             }
-
-        val weekAhead = (1L..7L).map { offset ->
-            val d = today.plusDays(offset)
-            val key = d.format(DateTimeFormatter.ISO_LOCAL_DATE)
-            val dow = d.dayOfWeek.value % 7
-            val classCount = school.classes.count { it.day == dow }
-            val dueTasks = school.homework.filter { !it.done && it.due == key }.map { it.text }
-            val tests = school.study.filter { !it.done && it.date == key }.map { it.text } +
-                school.exams.filter { it.date == key }.map { "${it.subject} exam" }
-            WeekDaySummary(
-                dayLabel = "${HubFormatters.DAY_NAMES[dow].take(3)} ${d.dayOfMonth}",
-                classCount = classCount,
-                dueTasks = dueTasks,
-                tests = tests
-            )
+            false
         }
-
-        // Money calculations
-        val spentMonth = transactions
-            .filter { it.type == "s" && it.date.take(7) == monthKey }
-            .sumOf { it.amt }
-        val spentToday = transactions
-            .filter { it.type == "s" && it.date == todayKey }
-            .sumOf { it.amt }
-        val spentWeek = transactions
-            .filter { it.type == "s" && it.date in weekStartKey..todayKey }
-            .sumOf { it.amt }
-        val earnedMonth = transactions
-            .filter { it.type == "e" && it.date.take(7) == monthKey }
-            .sumOf { it.amt }
-
-        val catMap = linkedMapOf<String, Double>()
-        transactions
-            .filter { it.type == "s" && it.date.take(7) == monthKey }
-            .forEach { t ->
-                catMap[t.cat] = (catMap[t.cat] ?: 0.0) + t.amt
-            }
-        val categorySpends = catMap.entries
-            .sortedByDescending { it.value }
-            .map { (cat, amt) ->
-                val ratio = if (spentMonth > 0.0) (amt / spentMonth).toFloat().coerceIn(0f, 1f) else 0f
-                CategorySpend(cat, amt, ratio)
-            }
-
-        return HubUiState(
-            isUnlocked = unlocked,
-            lockError = lockError,
-            lockShakeCount = lockShakeCount,
-            themeMode = prefs.themeMode,
-            activeSection = prefs.activeSection,
-            schoolTab = prefs.schoolTab,
-            moneyTab = prefs.moneyTab,
-            todayDate = today,
-            tomorrowDate = tomorrow,
-            tomorrowDayOfWeek = tomorrowDow,
-            tomorrowKey = tomorrowKey,
-            tomorrowClasses = tomorrowClasses,
-            classesByDay = classesByDay,
-            homework = sortedHomework,
-            dueTomorrowCount = dueTomorrowCount,
-            studyTopics = sortedStudy,
-            toStudyCount = toStudyCount,
-            packItems = school.pack,
-            exams = examItems,
-            weekAhead = weekAhead,
-            timerMode = timer.mode,
-            timerStatusLabel = timer.statusLabel,
-            timerSeconds = timer.seconds,
-            timerRunning = timer.running,
-            currency = prefs.currency,
-            transactions = transactions,
-            showAllTransactions = showAll,
-            spentThisMonth = spentMonth,
-            spentToday = spentToday,
-            spentLast7Days = spentWeek,
-            earnedThisMonth = earnedMonth,
-            monthlyBudget = prefs.monthlyBudget,
-            categorySpends = categorySpends,
-            goalName = prefs.goalName,
-            goalTarget = prefs.goalTarget,
-            goalSaved = prefs.goalSaved
-        )
     }
 
-    // Lock screen
-    fun submitPassword(input: String) {
-        if (verifyPassword(input)) {
-            lockError.value = ""
-            isUnlocked.value = true
-        } else {
-            lockError.value = "Incorrect password. Try again."
-            lockShakeCount.value += 1
-        }
+    fun clearLockError() {
+        _lockState.update { it.copy(error = null) }
     }
 
     fun lockApp() {
-        isUnlocked.value = false
-        lockError.value = ""
+        _lockState.update { it.copy(isUnlocked = false, error = null) }
     }
 
-    private fun verifyPassword(value: String): Boolean {
-        val codes = intArrayOf(49, 114, 50, 114, 51, 114, 52, 82)
-        if (value.length != codes.size) return false
-        for (i in codes.indices) {
-            if (value[i].code != codes[i]) return false
-        }
-        return true
-    }
-
-    // Theme & Navigation
     fun toggleTheme(currentlyDark: Boolean) {
         viewModelScope.launch {
-            repository.setThemeMode(if (currentlyDark) ThemeMode.LIGHT else ThemeMode.DARK)
+            repository.setTheme(if (currentlyDark) ThemePreference.LIGHT else ThemePreference.DARK)
         }
     }
 
-    fun selectSection(section: String) {
+    fun selectMainSection(section: MainSection) {
         viewModelScope.launch { repository.setActiveSection(section) }
     }
 
@@ -318,11 +205,11 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // School actions
-    fun addClass(day: Int, time: String, name: String) {
+    fun addClass(dayOfWeek: Int, time: String, name: String) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
         viewModelScope.launch {
-            repository.addClass(day, time.ifBlank { "08:00" }, trimmed)
+            repository.addClass(dayOfWeek, time.ifBlank { "08:00" }, trimmed)
         }
     }
 
@@ -330,10 +217,10 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { repository.deleteClass(id) }
     }
 
-    fun addHomework(text: String, due: String) {
+    fun addHomework(text: String, dueDate: String) {
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return
-        viewModelScope.launch { repository.addHomework(trimmed, due) }
+        viewModelScope.launch { repository.addHomework(trimmed, dueDate) }
     }
 
     fun toggleHomework(item: HomeworkEntity) {
@@ -344,10 +231,10 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { repository.deleteHomework(id) }
     }
 
-    fun addStudyTopic(text: String, date: String) {
+    fun addStudyTopic(text: String, testDate: String) {
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return
-        viewModelScope.launch { repository.addStudyTopic(trimmed, date) }
+        viewModelScope.launch { repository.addStudyTopic(trimmed, testDate) }
     }
 
     fun toggleStudyTopic(item: StudyTopicEntity) {
@@ -364,8 +251,7 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { repository.addPackItem(trimmed) }
     }
 
-    fun togglePackItem(item: PackItemEntity) {
-        val tomorrowKey = uiState.value.tomorrowKey
+    fun togglePackItem(item: PackItemEntity, tomorrowKey: String) {
         viewModelScope.launch { repository.togglePackItem(item, tomorrowKey) }
     }
 
@@ -374,9 +260,13 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun addExam(subject: String, date: String, rawTopics: String, method: String) {
-        val s = subject.trim()
-        if (s.isEmpty() || date.isBlank()) return
-        viewModelScope.launch { repository.addExam(s, date, rawTopics, method) }
+        val cleanSubject = subject.trim()
+        val cleanDate = date.trim()
+        if (cleanSubject.isEmpty() || cleanDate.isEmpty()) return
+        val topics = rawTopics.split(",")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+        viewModelScope.launch { repository.addExam(cleanSubject, cleanDate, topics, method) }
     }
 
     fun toggleExamTopic(exam: ExamEntity, topicIndex: Int) {
@@ -389,65 +279,73 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
 
     // Study Timer
     fun toggleTimer() {
-        if (timerRunning.value) {
-            stopTimer()
+        if (_timerState.value.isRunning) {
+            pauseTimer()
         } else {
-            timerRunning.value = true
-            timerStatusLabel.value = timerMode.value
-            timerJob?.cancel()
-            timerJob = viewModelScope.launch {
-                while (timerRunning.value) {
-                    delay(1000L)
-                    val next = timerSeconds.value - 1
-                    if (next <= 0) {
-                        stopTimer()
-                        val nextMode = if (timerMode.value == "Focus") "Break" else "Focus"
-                        setTimerMode(nextMode)
-                        timerStatusLabel.value = if (nextMode == "Break") "Time for a break" else "Back to focus"
-                    } else {
-                        timerSeconds.value = next
-                    }
+            startTimer()
+        }
+    }
+
+    private fun startTimer() {
+        timerJob?.cancel()
+        _timerState.update { it.copy(isRunning = true) }
+        timerJob = viewModelScope.launch {
+            while (true) {
+                delay(1_000L)
+                val current = _timerState.value
+                if (!current.isRunning) break
+                val nextSeconds = current.secondsRemaining - 1
+                if (nextSeconds <= 0) {
+                    val nextMode = if (current.mode == "Focus") "Break" else "Focus"
+                    val nextDuration = if (nextMode == "Focus") 25 * 60 else 5 * 60
+                    val nextLabel = if (nextMode == "Break") "Time for a break" else "Back to focus"
+                    _timerState.value = StudyTimerState(
+                        mode = nextMode,
+                        statusLabel = nextLabel,
+                        secondsRemaining = nextDuration,
+                        isRunning = false
+                    )
+                    break
+                } else {
+                    _timerState.update { it.copy(secondsRemaining = nextSeconds) }
                 }
             }
         }
     }
 
+    private fun pauseTimer() {
+        timerJob?.cancel()
+        timerJob = null
+        _timerState.update { it.copy(isRunning = false) }
+    }
+
     fun resetTimer() {
-        stopTimer()
-        setTimerMode(timerMode.value)
+        pauseTimer()
+        val mode = _timerState.value.mode
+        _timerState.value = StudyTimerState(
+            mode = mode,
+            statusLabel = mode,
+            secondsRemaining = if (mode == "Focus") 25 * 60 else 5 * 60,
+            isRunning = false
+        )
     }
 
     fun swapTimerMode() {
-        stopTimer()
-        val nextMode = if (timerMode.value == "Focus") "Break" else "Focus"
-        setTimerMode(nextMode)
-    }
-
-    private fun stopTimer() {
-        timerJob?.cancel()
-        timerJob = null
-        timerRunning.value = false
-    }
-
-    private fun setTimerMode(mode: String) {
-        timerMode.value = mode
-        timerStatusLabel.value = mode
-        timerSeconds.value = if (mode == "Focus") 1500 else 300
+        pauseTimer()
+        val nextMode = if (_timerState.value.mode == "Focus") "Break" else "Focus"
+        _timerState.value = StudyTimerState(
+            mode = nextMode,
+            statusLabel = nextMode,
+            secondsRemaining = if (nextMode == "Focus") 25 * 60 else 5 * 60,
+            isRunning = false
+        )
     }
 
     // Money actions
-    fun addTransaction(amountText: String, type: String, category: String, note: String, date: String) {
-        val amount = amountText.toDoubleOrNull() ?: return
+    fun addTransaction(amount: Double, type: String, category: String, note: String, date: String) {
         if (amount <= 0.0) return
-        val fallbackDate = uiState.value.todayDate.format(DateTimeFormatter.ISO_LOCAL_DATE)
         viewModelScope.launch {
-            repository.addTransaction(
-                amt = amount,
-                type = type,
-                cat = category,
-                note = note.trim(),
-                date = date.ifBlank { fallbackDate }
-            )
+            repository.addTransaction(amount, type, category, note.trim(), date)
         }
     }
 
@@ -455,39 +353,74 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { repository.deleteTransaction(id) }
     }
 
-    fun toggleShowAllTransactions() {
-        showAllTx.value = !showAllTx.value
+    fun toggleShowAllHistory() {
+        _showAllHistory.update { !it }
     }
 
-    fun setMonthlyBudget(amountText: String) {
-        val v = amountText.toDoubleOrNull() ?: return
-        if (v < 0.0) return
-        viewModelScope.launch { repository.setMonthlyBudget(v) }
+    fun setMonthlyBudget(budget: Double) {
+        if (budget < 0.0) return
+        viewModelScope.launch { repository.setMonthlyBudget(budget) }
     }
 
-    fun setSavingsGoal(name: String, targetText: String) {
+    fun setCurrencySymbol(symbol: String) {
+        viewModelScope.launch { repository.setCurrencySymbol(symbol) }
+    }
+
+    fun setSavingsGoal(name: String, target: Double) {
         val trimmed = name.trim()
-        val target = targetText.toDoubleOrNull() ?: return
         if (trimmed.isEmpty() || target <= 0.0) return
         viewModelScope.launch { repository.setSavingsGoal(trimmed, target) }
     }
 
-    fun addSavings(amountText: String) {
-        val v = amountText.toDoubleOrNull() ?: return
-        if (v <= 0.0) return
-        val current = uiState.value.goalSaved
-        viewModelScope.launch { repository.addSavings(current + v) }
+    fun addToSavingsGoal(amount: Double) {
+        if (amount <= 0.0) return
+        viewModelScope.launch { repository.addToSavingsGoal(amount) }
     }
 
-    fun removeSavingsGoal() {
-        viewModelScope.launch { repository.removeSavingsGoal() }
-    }
-
-    fun setCurrency(symbol: String) {
-        viewModelScope.launch { repository.setCurrency(symbol) }
+    fun deleteSavingsGoal() {
+        viewModelScope.launch { repository.deleteSavingsGoal() }
     }
 
     fun eraseAllMoneyData() {
         viewModelScope.launch { repository.eraseAllMoneyData() }
+    }
+
+    // JSON Backup Export (School + Money)
+    fun defaultBackupFilename(): String {
+        val today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
+        return "myhub_backup_$today.json"
+    }
+
+    fun exportBackupToUri(uri: Uri) {
+        viewModelScope.launch {
+            _exportState.update { it.copy(isExporting = true) }
+            try {
+                val result = repository.buildBackupJson()
+                withContext(Dispatchers.IO) {
+                    val resolver = getApplication<Application>().contentResolver
+                    resolver.openOutputStream(uri)?.use { stream ->
+                        stream.write(result.jsonContent.toByteArray(Charsets.UTF_8))
+                        stream.flush()
+                    } ?: throw IllegalStateException("Unable to open output stream")
+                }
+                val summary = getApplication<Application>().getString(
+                    R.string.settings_export_success,
+                    result.schoolItemCount,
+                    result.moneyItemCount
+                )
+                _exportState.value = ExportUiState(isExporting = false, lastSummary = summary)
+                _backupEvents.emit(BackupExportEvent.Success(result.schoolItemCount, result.moneyItemCount))
+            } catch (e: Exception) {
+                val errMsg = e.message?.takeIf { it.isNotBlank() }
+                    ?: getApplication<Application>().getString(R.string.settings_export_error)
+                _exportState.update { it.copy(isExporting = false) }
+                _backupEvents.emit(BackupExportEvent.Failure(errMsg))
+            }
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        timerJob?.cancel()
     }
 }

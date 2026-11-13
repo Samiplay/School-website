@@ -7,101 +7,106 @@ import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import com.example.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
-private val Context.hubDataStore: DataStore<Preferences> by preferencesDataStore(name = "hub_prefs")
+private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "my_hub_prefs")
 
-data class HubPrefsState(
-    val themeMode: ThemeMode = ThemeMode.SYSTEM,
-    val activeSection: String = "school",
-    val schoolTab: String = "tomorrow",
-    val moneyTab: String = "log",
+data class UserPrefs(
+    val themeMode: String = "system", // "system", "light", "dark"
+    val activeSection: String = "school", // "school", "money"
+    val schoolTab: String = "tomorrow", // "tomorrow", "work", "exams"
+    val moneyTab: String = "log", // "log", "budget", "settings"
+    val currencySymbol: String = "$",
     val monthlyBudget: Double = 0.0,
-    val currency: String = "$",
-    val goalName: String = "",
-    val goalTarget: Double = 0.0,
-    val goalSaved: Double = 0.0
+    val savingsGoalName: String? = null,
+    val savingsGoalTarget: Double = 0.0,
+    val savingsGoalSaved: Double = 0.0
 )
 
 class HubPreferences(private val context: Context) {
     private object Keys {
-        val THEME = stringPreferencesKey("hub_theme")
-        val APP = stringPreferencesKey("hub_app")
-        val SP_TAB = stringPreferencesKey("sp_tab")
-        val MM_TAB = stringPreferencesKey("mm_tab")
-        val MM_BUDGET = doublePreferencesKey("mm_budget")
-        val MM_CUR = stringPreferencesKey("mm_cur")
-        val MM_GOAL_NAME = stringPreferencesKey("mm_goal_name")
-        val MM_GOAL_TARGET = doublePreferencesKey("mm_goal_target")
-        val MM_GOAL_SAVED = doublePreferencesKey("mm_goal_saved")
+        val THEME_MODE = stringPreferencesKey("hub_theme")
+        val ACTIVE_SECTION = stringPreferencesKey("hub_app")
+        val SCHOOL_TAB = stringPreferencesKey("sp_tab")
+        val MONEY_TAB = stringPreferencesKey("mm_tab")
+        val CURRENCY = stringPreferencesKey("mm_cur")
+        val BUDGET = doublePreferencesKey("mm_budget")
+        val GOAL_NAME = stringPreferencesKey("mm_goal_name")
+        val GOAL_TARGET = doublePreferencesKey("mm_goal_target")
+        val GOAL_SAVED = doublePreferencesKey("mm_goal_saved")
     }
 
-    val prefsFlow: Flow<HubPrefsState> = context.hubDataStore.data.map { prefs ->
-        HubPrefsState(
-            themeMode = ThemeMode.fromKey(prefs[Keys.THEME] ?: "system"),
-            activeSection = prefs[Keys.APP] ?: "school",
-            schoolTab = prefs[Keys.SP_TAB] ?: "tomorrow",
-            moneyTab = prefs[Keys.MM_TAB] ?: "log",
-            monthlyBudget = prefs[Keys.MM_BUDGET] ?: 0.0,
-            currency = prefs[Keys.MM_CUR] ?: "$",
-            goalName = prefs[Keys.MM_GOAL_NAME] ?: "",
-            goalTarget = prefs[Keys.MM_GOAL_TARGET] ?: 0.0,
-            goalSaved = prefs[Keys.MM_GOAL_SAVED] ?: 0.0
+    val prefsFlow: Flow<UserPrefs> = context.dataStore.data.map { prefs ->
+        UserPrefs(
+            themeMode = prefs[Keys.THEME_MODE] ?: "system",
+            activeSection = prefs[Keys.ACTIVE_SECTION] ?: "school",
+            schoolTab = prefs[Keys.SCHOOL_TAB] ?: "tomorrow",
+            moneyTab = prefs[Keys.MONEY_TAB] ?: "log",
+            currencySymbol = prefs[Keys.CURRENCY] ?: "$",
+            monthlyBudget = prefs[Keys.BUDGET] ?: 0.0,
+            savingsGoalName = prefs[Keys.GOAL_NAME]?.takeIf { it.isNotBlank() },
+            savingsGoalTarget = prefs[Keys.GOAL_TARGET] ?: 0.0,
+            savingsGoalSaved = prefs[Keys.GOAL_SAVED] ?: 0.0
         )
     }
 
-    suspend fun setThemeMode(mode: ThemeMode) {
-        context.hubDataStore.edit { it[Keys.THEME] = mode.key }
+    suspend fun getSnapshot(): UserPrefs = prefsFlow.first()
+
+    suspend fun setThemeMode(mode: String) {
+        context.dataStore.edit { it[Keys.THEME_MODE] = mode }
     }
 
     suspend fun setActiveSection(section: String) {
-        context.hubDataStore.edit { it[Keys.APP] = section }
+        context.dataStore.edit { it[Keys.ACTIVE_SECTION] = section }
     }
 
     suspend fun setSchoolTab(tab: String) {
-        context.hubDataStore.edit { it[Keys.SP_TAB] = tab }
+        context.dataStore.edit { it[Keys.SCHOOL_TAB] = tab }
     }
 
     suspend fun setMoneyTab(tab: String) {
-        context.hubDataStore.edit { it[Keys.MM_TAB] = tab }
-    }
-
-    suspend fun setMonthlyBudget(amount: Double) {
-        context.hubDataStore.edit { it[Keys.MM_BUDGET] = amount }
+        context.dataStore.edit { it[Keys.MONEY_TAB] = tab }
     }
 
     suspend fun setCurrency(symbol: String) {
-        context.hubDataStore.edit { it[Keys.MM_CUR] = symbol }
+        context.dataStore.edit { it[Keys.CURRENCY] = symbol }
+    }
+
+    suspend fun setMonthlyBudget(amount: Double) {
+        context.dataStore.edit { it[Keys.BUDGET] = amount }
     }
 
     suspend fun setSavingsGoal(name: String, target: Double, saved: Double = 0.0) {
-        context.hubDataStore.edit {
-            it[Keys.MM_GOAL_NAME] = name
-            it[Keys.MM_GOAL_TARGET] = target
-            it[Keys.MM_GOAL_SAVED] = saved
+        context.dataStore.edit {
+            it[Keys.GOAL_NAME] = name
+            it[Keys.GOAL_TARGET] = target
+            it[Keys.GOAL_SAVED] = saved
         }
     }
 
-    suspend fun updateGoalSaved(saved: Double) {
-        context.hubDataStore.edit { it[Keys.MM_GOAL_SAVED] = saved }
-    }
-
-    suspend fun clearGoal() {
-        context.hubDataStore.edit {
-            it.remove(Keys.MM_GOAL_NAME)
-            it.remove(Keys.MM_GOAL_TARGET)
-            it.remove(Keys.MM_GOAL_SAVED)
+    suspend fun addSavings(delta: Double) {
+        context.dataStore.edit {
+            val current = it[Keys.GOAL_SAVED] ?: 0.0
+            it[Keys.GOAL_SAVED] = kotlin.math.round((current + delta) * 100.0) / 100.0
         }
     }
 
-    suspend fun clearMoneySettings() {
-        context.hubDataStore.edit {
-            it[Keys.MM_BUDGET] = 0.0
-            it.remove(Keys.MM_GOAL_NAME)
-            it.remove(Keys.MM_GOAL_TARGET)
-            it.remove(Keys.MM_GOAL_SAVED)
+    suspend fun clearSavingsGoal() {
+        context.dataStore.edit {
+            it.remove(Keys.GOAL_NAME)
+            it.remove(Keys.GOAL_TARGET)
+            it.remove(Keys.GOAL_SAVED)
+        }
+    }
+
+    suspend fun eraseMoneySettings() {
+        context.dataStore.edit {
+            it[Keys.BUDGET] = 0.0
+            it.remove(Keys.GOAL_NAME)
+            it.remove(Keys.GOAL_TARGET)
+            it.remove(Keys.GOAL_SAVED)
         }
     }
 }

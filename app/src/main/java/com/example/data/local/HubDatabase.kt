@@ -10,7 +10,7 @@ import androidx.room.RoomDatabase
         SchoolClassEntity::class,
         HomeworkEntity::class,
         StudyTopicEntity::class,
-        PackItemEntity::class,
+        BagItemEntity::class,
         ExamEntity::class,
         TransactionEntity::class
     ],
@@ -29,7 +29,7 @@ abstract class HubDatabase : RoomDatabase() {
                 INSTANCE ?: Room.databaseBuilder(
                     context.applicationContext,
                     HubDatabase::class.java,
-                    "my_hub_database"
+                    "my_hub.db"
                 ).build().also { INSTANCE = it }
             }
         }
