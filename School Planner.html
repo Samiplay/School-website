@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>School Planner</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=Figtree:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f1f2fa;--surface:#fff;--ink:#1a1d3a;--muted:#5f6488;--line:#d9dbee;--accent:#3b3fd8;--accent-ink:#fff;--hl:#ffd84d;--hl-ink:#3a2f00;--warn:#c2410c;--done:#a0a4c4;color-scheme:light;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10122a;--surface:#191c3d;--ink:#e9eaff;--muted:#9a9fcb;--line:#2b2f5c;--accent:#8c90ff;--accent-ink:#10122a;--hl:#ffd84d;--hl-ink:#3a2f00;--warn:#fb923c;--done:#5a5e90;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#10122a;--surface:#191c3d;--ink:#e9eaff;--muted:#9a9fcb;--line:#2b2f5c;--accent:#8c90ff;--accent-ink:#10122a;--hl:#ffd84d;--hl-ink:#3a2f00;--warn:#fb923c;--done:#5a5e90;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Figtree,system-ui,sans-serif}
+main{max-width:640px;margin:0 auto;padding:16px 16px 56px}
+.top{display:flex;justify-content:flex-end}
+.theme{background:none;border:0;color:var(--muted);font:inherit;font-size:.9rem;padding:4px 8px;cursor:pointer;border-radius:8px}
+h1{font:800 clamp(2.4rem,11vw,3.6rem)/1 "Bricolage Grotesque",system-ui,sans-serif;margin:4px 0 6px;letter-spacing:-.03em}
+h1 span{background:linear-gradient(transparent 58%,var(--hl) 58%,var(--hl) 92%,transparent 92%);padding:0 4px;margin:0 -4px}
+.sub{color:var(--muted);margin:0 0 20px}
+.summary{display:flex;gap:8px;margin-bottom:16px}
+.pill{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.pill b{display:block;font:800 1.6rem/1.1 "Bricolage Grotesque",system-ui,sans-serif}
+.pill small{color:var(--muted)}
+section{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px}
+h2{font:800 1.2rem "Bricolage Grotesque",system-ui,sans-serif;margin:0 0 12px}
+form{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 8px}
+input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
+input[type=text]{flex:1 1 160px}
+button{font:inherit;cursor:pointer;border:0;border-radius:10px}
+.add{background:var(--accent);color:var(--accent-ink);padding:10px 16px;font-weight:600}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+ul{list-style:none;margin:0;padding:0}
+li{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+li:first-child{border-top:0}
+.time{flex:none;width:68px;font-weight:600;color:var(--accent)}
+.txt{flex:1;word-break:break-word}
+.txt small{display:block;color:var(--muted)}
+.chk{width:28px;height:28px;flex:none;border:2px solid var(--accent);background:transparent;color:var(--accent-ink);border-radius:8px;font-weight:700;line-height:1;padding:0}
+.on .chk{background:var(--accent)}
+.on .txt{color:var(--done);text-decoration:line-through}
+.tag{flex:none;font-size:.8rem;font-weight:600;background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:2px 10px;white-space:nowrap}
+.tag.soon{background:var(--hl);border-color:var(--hl);color:var(--hl-ink)}
+.tag.late{color:var(--warn);border-color:var(--warn)}
+.del{background:none;color:var(--muted);font-size:1.3rem;padding:2px 8px}
+.empty{color:var(--muted);margin:4px 0 8px}
+details{margin-top:12px}
+summary{cursor:pointer;font-weight:600;color:var(--accent)}
+.day{font-weight:600;margin:12px 0 0}
+.week li{align-items:flex-start}.wd{flex:none;width:68px;font-weight:600}
+.timer{font:800 3.4rem/1 "Bricolage Grotesque",system-ui,sans-serif;text-align:center;margin:8px 0 14px}
+.trow{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.alt{background:var(--bg);color:var(--ink);border:1px solid var(--line);padding:10px 16px;font-weight:600}
+.mode{text-align:center;color:var(--muted);margin:0}
+.exam{border-top:1px solid var(--line);padding:14px 0}.exam:first-child{border-top:0;padding-top:0}
+.exh{display:flex;align-items:center;gap:8px}.exh b{flex:1;font:800 1.1rem "Bricolage Grotesque",system-ui,sans-serif}
+.topics{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.topic{border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:5px 12px;border-radius:999px;font-size:.9rem}
+.topic.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.how{margin:4px 0;color:var(--muted);font-size:.92rem}.how b{color:var(--ink)}
+.prog{height:6px;background:var(--line);border-radius:99px;overflow:hidden;margin:8px 0}.prog i{display:block;height:100%;background:var(--accent)}
+.wide{flex:1 1 100%}
+.tabs{display:flex;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:4px;margin-bottom:16px}
+.tabs button{flex:1;background:none;color:var(--muted);padding:10px 8px;font-weight:600;border-radius:10px}
+.tabs button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
+section[hidden]{display:none}
+</style>
+</head>
+<body>
+<main>
+<div class="top"><button class="theme" id="theme" type="button">Switch theme</button></div>
+<h1>Tomorrow<span id="wd"></span></h1>
+<p class="sub" id="sub"></p>
+
+<div class="summary" aria-live="polite">
+<div class="pill"><b id="n-class">0</b><small>classes</small></div>
+<div class="pill"><b id="n-due">0</b><small>due tomorrow</small></div>
+<div class="pill"><b id="n-study">0</b><small>to study</small></div>
+</div>
+
+<div class="tabs" role="tablist" id="tabs"><button role="tab" data-tab="tomorrow" type="button">Tomorrow</button><button role="tab" data-tab="work" type="button">Homework</button><button role="tab" data-tab="exams" type="button">Exams</button></div>
+
+<section>
+<h2>Classes</h2>
+<ul id="classes"></ul>
+<details>
+<summary>Edit weekly timetable</summary>
+<form id="cform" style="margin-top:12px">
+<select id="cday" aria-label="Day"><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="0">Sunday</option></select>
+<input type="time" id="ctime" value="08:30" aria-label="Start time">
+<input type="text" id="cname" placeholder="Subject (and room)" aria-label="Subject" maxlength="60">
+<button class="add" type="submit">Add class</button>
+</form>
+<div id="alldays"></div>
+</details>
+</section>
+
+<section>
+<h2>Homework and to do</h2>
+<form id="hform">
+<input type="text" id="hin" placeholder="What do you need to do?" aria-label="Task" maxlength="120">
+<input type="date" id="hdue" aria-label="Due date">
+<button class="add" type="submit">Add task</button>
+</form>
+<ul id="hw"></ul>
+</section>
+
+<section>
+<h2>Exams</h2>
+<form id="eform">
+<input type="text" id="esub" placeholder="Exam subject, like Biology" aria-label="Exam subject" maxlength="60">
+<input type="date" id="edate" aria-label="Exam date">
+<input type="text" id="etop" class="wide" placeholder="Topics to study, separated by commas" aria-label="Topics" maxlength="300">
+<select id="emeth" aria-label="How you want to study"><option>Flashcards</option><option>Practice questions</option><option>Summary notes</option><option>Past papers</option><option>Teach it out loud</option></select>
+<button class="add" type="submit">Add exam</button>
+</form>
+<div id="exams"></div>
+</section>
+
+<section>
+<h2>Study list</h2>
+<form id="sform">
+<input type="text" id="sin" placeholder="What should you study?" aria-label="Study topic" maxlength="120">
+<input type="date" id="sdate" aria-label="Test date (optional)">
+<button class="add" type="submit">Add topic</button>
+</form>
+<ul id="study"></ul>
+</section>
+<section>
+<h2>Pack your bag</h2>
+<form id="pform"><input type="text" id="pin" placeholder="Add an item, like PE kit" aria-label="Bag item" maxlength="60"><button class="add" type="submit">Add item</button></form>
+<ul id="pack"></ul>
+</section>
+
+<section>
+<h2>Week ahead</h2>
+<ul class="week" id="week"></ul>
+</section>
+
+<section>
+<h2>Study timer</h2>
+<p class="mode" id="tmode">Focus</p>
+<div class="timer" id="tclock" role="timer">25:00</div>
+<div class="trow"><button class="add" id="tgo" type="button">Start</button><button class="alt" id="treset" type="button">Reset</button><button class="alt" id="tswap" type="button">Switch to break</button></div>
+</section>
+</main>
+<script>
+(function(){
+var mem={};
+function load(k,d){try{var v=localStorage.getItem(k);if(v!==null)return JSON.parse(v)}catch(e){}return k in mem?mem[k]:d}
+function save(k,v){mem[k]=v;try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+function dkey(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML}
+var DAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+var now=new Date();now.setHours(0,0,0,0);
+var tmr=new Date(now);tmr.setDate(tmr.getDate()+1);
+var todayK=dkey(now),tmrK=dkey(tmr);
+document.getElementById('wd').textContent=' '+DAYS[tmr.getDay()];
+document.getElementById('sub').textContent=tmr.toLocaleDateString(undefined,{month:'long',day:'numeric'})+'. Here is what to get ready tonight.';
+document.getElementById('hdue').value=tmrK;
+
+var classes=load('sp_classes',[]),hw=load('sp_hw',[]),study=load('sp_study',[]);
+
+function t12(t){var p=t.split(':'),h=+p[0],m=p[1];return ((h%12)||12)+':'+m+(h<12?' am':' pm')}
+function daysUntil(k){var p=k.split('-');var d=new Date(+p[0],+p[1]-1,+p[2]);return Math.round((d-now)/864e5)}
+function dueLabel(k){if(!k)return {t:'No date',c:''};var n=daysUntil(k);
+if(n<0)return {t:'Overdue',c:'late'};if(n===0)return {t:'Today',c:'soon'};if(n===1)return {t:'Tomorrow',c:'soon'};
+if(n<7){var p=k.split('-');return {t:DAYS[new Date(+p[0],+p[1]-1,+p[2]).getDay()].slice(0,3),c:''}}
+var q=k.split('-');return {t:new Date(+q[0],+q[1]-1,+q[2]).toLocaleDateString(undefined,{month:'short',day:'numeric'}),c:''}}
+function byTime(a,b){return a.time<b.time?-1:a.time>b.time?1:0}
+
+function render(){
+var tc=classes.filter(function(c){return c.day===tmr.getDay()}).sort(byTime);
+document.getElementById('classes').innerHTML=tc.length?tc.map(function(c){return '<li><span class="time">'+t12(c.time)+'</span><span class="txt">'+esc(c.name)+'</span></li>'}).join(''):'<p class="empty">No classes added for '+DAYS[tmr.getDay()]+'. Open the timetable below to add them.</p>';
+
+var ad='';
+[1,2,3,4,5,6,0].forEach(function(d){var l=classes.map(function(c,i){return {c:c,i:i}}).filter(function(x){return x.c.day===d}).sort(function(a,b){return byTime(a.c,b.c)});
+if(l.length)ad+='<p class="day">'+DAYS[d]+'</p><ul>'+l.map(function(x){return '<li><span class="time">'+t12(x.c.time)+'</span><span class="txt">'+esc(x.c.name)+'</span><button class="del" data-dc="'+x.i+'" aria-label="Delete class">×</button></li>'}).join('')+'</ul>'});
+document.getElementById('alldays').innerHTML=ad;
+
+var hl=hw.map(function(h,i){return {h:h,i:i}}).sort(function(a,b){if(a.h.done!==b.h.done)return a.h.done?1:-1;return (a.h.due||'9999')<(b.h.due||'9999')?-1:1});
+document.getElementById('hw').innerHTML=hl.length?hl.map(function(x){var h=x.h,d=dueLabel(h.due);return '<li class="'+(h.done?'on':'')+'"><button class="chk" data-h="'+x.i+'" aria-label="Mark done" aria-pressed="'+!!h.done+'">'+(h.done?'✓':'')+'</button><span class="txt">'+esc(h.text)+'</span><span class="tag '+(h.done?'':d.c)+'">'+d.t+'</span><button class="del" data-dh="'+x.i+'" aria-label="Delete task">×</button></li>'}).join(''):'<p class="empty">All clear. Add anything you need to hand in.</p>';
+
+var sl=study.map(function(s,i){return {s:s,i:i}}).sort(function(a,b){if(a.s.done!==b.s.done)return a.s.done?1:-1;return (a.s.date||'9999')<(b.s.date||'9999')?-1:1});
+document.getElementById('study').innerHTML=sl.length?sl.map(function(x){var s=x.s,n=s.date?daysUntil(s.date):null,tag=s.date?(n<0?'Past':n===0?'Test today':n===1?'Test tomorrow':'Test in '+n+' days'):'';return '<li class="'+(s.done?'on':'')+'"><button class="chk" data-s="'+x.i+'" aria-label="Mark studied" aria-pressed="'+!!s.done+'">'+(s.done?'✓':'')+'</button><span class="txt">'+esc(s.text)+'</span>'+(tag?'<span class="tag '+(!s.done&&n!==null&&n>=0&&n<=1?'soon':'')+'">'+tag+'</span>':'')+'<button class="del" data-ds="'+x.i+'" aria-label="Delete topic">×</button></li>'}).join(''):'<p class="empty">Nothing to study yet. Add a topic or an upcoming test.</p>';
+
+document.getElementById('n-class').textContent=tc.length;
+document.getElementById('n-due').textContent=hw.filter(function(h){return !h.done&&h.due&&h.due<=tmrK}).length;
+document.getElementById('n-study').textContent=study.filter(function(s){return !s.done}).length;
+}
+
+document.getElementById('cform').addEventListener('submit',function(e){e.preventDefault();var n=document.getElementById('cname'),v=n.value.trim();if(!v)return;
+classes.push({day:+document.getElementById('cday').value,time:document.getElementById('ctime').value||'08:00',name:v});n.value='';save('sp_classes',classes);render()});
+document.getElementById('hform').addEventListener('submit',function(e){e.preventDefault();var i=document.getElementById('hin'),v=i.value.trim();if(!v)return;
+hw.push({text:v,due:document.getElementById('hdue').value,done:false});i.value='';save('sp_hw',hw);render()});
+document.getElementById('sform').addEventListener('submit',function(e){e.preventDefault();var i=document.getElementById('sin'),v=i.value.trim();if(!v)return;
+study.push({text:v,date:document.getElementById('sdate').value,done:false});i.value='';document.getElementById('sdate').value='';save('sp_study',study);render()});
+
+document.getElementById('alldays').addEventListener('click',function(e){var b=e.target.closest('button');if(!b||b.dataset.dc===undefined)return;classes.splice(+b.dataset.dc,1);save('sp_classes',classes);render()});
+document.getElementById('hw').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;
+if(b.dataset.h!==undefined)hw[b.dataset.h].done=!hw[b.dataset.h].done;else if(b.dataset.dh!==undefined)hw.splice(+b.dataset.dh,1);else return;save('sp_hw',hw);render()});
+document.getElementById('study').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;
+if(b.dataset.s!==undefined)study[b.dataset.s].done=!study[b.dataset.s].done;else if(b.dataset.ds!==undefined)study.splice(+b.dataset.ds,1);else return;save('sp_study',study);render()});
+
+document.getElementById('theme').addEventListener('click',function(){var r=document.documentElement,dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;r.dataset.theme=dark?'light':'dark'});
+var pack=load('sp_pack',[]);
+function extra(){
+var pl=document.getElementById('pack');
+pl.innerHTML=pack.length?pack.map(function(p,i){var on=p.done===tmrK;return '<li class="'+(on?'on':'')+'"><button class="chk" data-p="'+i+'" aria-label="Mark packed" aria-pressed="'+on+'">'+(on?'✓':'')+'</button><span class="txt">'+esc(p.text)+'</span><button class="del" data-dp="'+i+'" aria-label="Delete item">×</button></li>'}).join(''):'<p class="empty">List what goes in your bag. Checks reset every day.</p>';
+var w='';
+for(var i=1;i<=7;i++){var d=new Date(now);d.setDate(d.getDate()+i);var k=dkey(d);
+var nc=classes.filter(function(c){return c.day===d.getDay()}).length;
+var due=hw.filter(function(h){return !h.done&&h.due===k});
+var tests=study.filter(function(s){return !s.done&&s.date===k}).concat(exams.filter(function(x){return x.date===k}).map(function(x){return {text:x.subject+' exam'}}));
+w+='<li><span class="wd">'+DAYS[d.getDay()].slice(0,3)+' '+d.getDate()+'</span><span class="txt">'+nc+' class'+(nc===1?'':'es')+(due.length?'<small>Due: '+due.map(function(h){return esc(h.text)}).join(', ')+'</small>':'')+(tests.length?'<small>Test: '+tests.map(function(s){return esc(s.text)}).join(', ')+'</small>':'')+'</span>'+(tests.length?'<span class="tag soon">Test</span>':'')+'</li>'}
+document.getElementById('week').innerHTML=w;
+}
+document.getElementById('pform').addEventListener('submit',function(e){e.preventDefault();var i=document.getElementById('pin'),v=i.value.trim();if(!v)return;pack.push({text:v,done:''});i.value='';save('sp_pack',pack);render()});
+document.getElementById('pack').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;
+if(b.dataset.p!==undefined){var p=pack[b.dataset.p];p.done=p.done===tmrK?'':tmrK}else if(b.dataset.dp!==undefined)pack.splice(+b.dataset.dp,1);else return;save('sp_pack',pack);render()});
+
+var mode='Focus',secs=1500,iv=null;
+var clock=document.getElementById('tclock'),tmode=document.getElementById('tmode'),tgo=document.getElementById('tgo'),tswap=document.getElementById('tswap');
+function fmt(){clock.textContent=String(Math.floor(secs/60)).padStart(2,'0')+':'+String(secs%60).padStart(2,'0')}
+function setMode(m){mode=m;secs=m==='Focus'?1500:300;tmode.textContent=m;tswap.textContent=m==='Focus'?'Switch to break':'Switch to focus';fmt()}
+function stop(){clearInterval(iv);iv=null;tgo.textContent='Start'}
+tgo.addEventListener('click',function(){if(iv){stop();return}tgo.textContent='Pause';
+iv=setInterval(function(){secs--;if(secs<=0){stop();setMode(mode==='Focus'?'Break':'Focus');tmode.textContent=mode==='Break'?'Time for a break':'Back to focus'}else fmt()},1000)});
+document.getElementById('treset').addEventListener('click',function(){stop();setMode(mode)});
+tswap.addEventListener('click',function(){stop();setMode(mode==='Focus'?'Break':'Focus')});
+
+var exams=load('sp_exams',[]);
+var TIPS={'Flashcards':'Write a question on one side and the answer on the other. Say answers out loud, and put the ones you miss in a pile to repeat.','Practice questions':'Try questions before looking at your notes. Mark the ones you got wrong and redo only those.','Summary notes':'Shrink each topic to one page from memory, then check your notes to see what you missed.','Past papers':'Do one paper with a timer and no notes, mark it, then study only the gaps.','Teach it out loud':'Explain each topic as if teaching a friend. Wherever you get stuck is what to study next.'};
+function fdate(k){var p=k.split('-');return new Date(+p[0],+p[1]-1,+p[2]).toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'})}
+function exRender(){
+var l=exams.map(function(x,i){return {x:x,i:i}}).sort(function(a,b){return a.x.date<b.x.date?-1:1});
+document.getElementById('exams').innerHTML=l.length?l.map(function(o){var x=o.x,i=o.i,n=daysUntil(x.date),tot=x.topics.length,dn=x.topics.filter(function(t){return t.done}).length,rem=tot-dn;
+var tag=n<0?'Passed':n===0?'Today':n===1?'Tomorrow':'In '+n+' days';
+var per=n>=2?Math.ceil(rem/(n-1)):0;
+var plan=n<0?'This exam has passed. You can delete it.':n===0?'Exam today. Trust your preparation.':n===1?'Exam is tomorrow. Review your weakest topics, pack your bag, and sleep early.':!tot?'Add topics next time to get a daily plan.':rem===0?'Every topic is covered. Use the days left for practice.':'Plan: cover about '+per+' topic'+(per===1?'':'s')+' a day to finish the day before.';
+var chips=x.topics.map(function(t,j){return '<button class="topic'+(t.done?' on':'')+'" data-et="'+i+'-'+j+'" aria-pressed="'+!!t.done+'">'+(t.done?'✓ ':'')+esc(t.t)+'</button>'}).join('');
+return '<div class="exam"><div class="exh"><b>'+esc(x.subject)+'</b><span class="tag '+(n>=0&&n<=3?'soon':'')+'">'+tag+'</span><button class="del" data-de="'+i+'" aria-label="Delete exam">×</button></div><div class="how">'+fdate(x.date)+'</div>'+(tot?'<div class="prog" role="progressbar" aria-valuemin="0" aria-valuemax="'+tot+'" aria-valuenow="'+dn+'"><i style="width:'+Math.round(dn/tot*100)+'%"></i></div><div class="how">'+dn+' of '+tot+' topics covered. Tap a topic when you finish it.</div><div class="topics">'+chips+'</div>':'')+'<div class="how"><b>How to study:</b> '+esc(TIPS[x.method])+'</div><div class="how">'+plan+'</div></div>'}).join(''):'<p class="empty">No exams yet. Add one with its date and topics to get a study plan.</p>';
+}
+document.getElementById('eform').addEventListener('submit',function(e){e.preventDefault();var s=document.getElementById('esub').value.trim(),d=document.getElementById('edate').value;if(!s||!d)return;
+var t=document.getElementById('etop').value.split(',').map(function(v){return v.trim()}).filter(Boolean).map(function(v){return {t:v,done:false}});
+exams.push({subject:s,date:d,topics:t,method:document.getElementById('emeth').value});
+document.getElementById('esub').value='';document.getElementById('edate').value='';document.getElementById('etop').value='';save('sp_exams',exams);render()});
+document.getElementById('exams').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;
+if(b.dataset.et!==undefined){var p=b.dataset.et.split('-'),t=exams[+p[0]].topics[+p[1]];t.done=!t.done}else if(b.dataset.de!==undefined)exams.splice(+b.dataset.de,1);else return;save('sp_exams',exams);render()});
+var baseRender=render;
+render=function(){baseRender();extra();exRender()};
+render();
+var TABS={'Classes':'tomorrow','Pack your bag':'tomorrow','Homework and to do':'work','Week ahead':'work','Exams':'exams','Study list':'exams','Study timer':'exams'};
+var panels=document.querySelectorAll('main section');
+Array.prototype.forEach.call(panels,function(s){s.dataset.tab=TABS[s.querySelector('h2').textContent.trim()]||'tomorrow';s.setAttribute('role','tabpanel')});
+function showTab(n){if(!/^(tomorrow|work|exams)$/.test(n))n='tomorrow';
+Array.prototype.forEach.call(panels,function(s){s.hidden=s.dataset.tab!==n});
+Array.prototype.forEach.call(document.querySelectorAll('#tabs button'),function(b){b.setAttribute('aria-selected',String(b.dataset.tab===n))});
+save('sp_tab',n)}
+document.getElementById('tabs').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;location.hash=b.dataset.tab;showTab(b.dataset.tab)});
+window.addEventListener('hashchange',function(){showTab(location.hash.slice(1))});
+showTab(location.hash.slice(1)||load('sp_tab','tomorrow'));
+})();
+</script>
+</body>
+</html>
