@@ -1,0 +1,8 @@
+{
+  "name": "My Hub",
+  "description": "Private School Planner and My Money budget tracker with password lock, weekly timetable, homework, exam study plans, Pomodoro timer, and expense/savings tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

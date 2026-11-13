@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">My Hub</string>
+    <string name="lock_title">Private Hub</string>
+    <string name="lock_subtitle">Enter your password to open School Planner and My Money.</string>
+    <string name="lock_password_hint">Password</string>
+    <string name="lock_show">Show</string>
+    <string name="lock_hide">Hide</string>
+    <string name="lock_unlock">Unlock</string>
+    <string name="lock_error">Incorrect password. Try again.</string>
+    <string name="nav_school">School</string>
+    <string name="nav_money">Money</string>
+    <string name="action_theme">Theme</string>
+    <string name="action_lock">Lock</string>
+    <string name="cd_delete_item">Delete item</string>
+    <string name="cd_toggle_done">Toggle completed</string>
+</resources>
